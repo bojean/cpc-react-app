@@ -1,123 +1,173 @@
 const express = require('express');
-const cors = require('cors');
-const { Pool } = require('pg');
-const jwt = require('jsonwebtoken');
-require('dotenv').config({ debug: true }); // Enable dotenv debug logging
-
+const pool = require('../db');
+const axios = require('axios');
 const app = express();
-app.use(cors({
-  origin: 'http://localhost:3000', // Adjust based on your frontend URL
-  credentials: true
-}));
 app.use(express.json());
 
-const poolConfig = {
-  user: process.env.DB_USER || 'product_user',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'product_database',
-  password: process.env.DB_PASSWORD || '', // Ensure password is a string
-  port: parseInt(process.env.DB_PORT) || 5432
-};
-console.log('Pool Configuration:', poolConfig); // Debug pool config
+const userServiceUrl = process.env.USER_SERVICE_URL || 'http://localhost:5000'; // Points to first service
+const currentDate = new Date().toISOString().split('T')[0]; // 2025-08-29
 
-const pool = new Pool(poolConfig);
-
-// Middleware to authenticate and authorize
-const authenticate = (req, res, next) => {
+// Authentication middleware
+const authMiddleware = (requiredRole) => async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
-  console.log('Authentication Token:', token ? 'Present' : 'Missing');
-  if (!token) return res.status(401).json({ message: 'No token provided' });
+  if (!token) return res.status(401).json({ error: 'No token provided' });
+
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-    if (decoded.role !== 'admin') return res.status(403).json({ message: 'Admin access required' });
-    req.user = decoded;
-    console.log('Authenticated User:', req.user);
+    // Validate token by fetching user details from the first service
+    const response = await axios.get(`${userServiceUrl}/api/users/${token}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    req.user = response.data; // Expected: { id, email, role, profile_picture, username }
+    if (req.user.role !== requiredRole) return res.status(403).json({ error: 'Unauthorized' });
     next();
   } catch (err) {
-    console.error('Authentication Error:', err.message);
-    res.status(401).json({ message: 'Invalid token' });
+    if (err.response && err.response.status === 401) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    res.status(500).json({ error: 'Authentication service error' });
   }
 };
 
-
-
-// CRUD Endpoints
-app.get('/products', authenticate, async (req, res) => {
+// Admin-only CRUD operations
+app.get('/products', authMiddleware('admin'), async (req, res) => {
   try {
-    const result = await pool.query('SELECT p.*, s.quantity FROM products p LEFT JOIN stocks s ON p.id = s.id');
-    console.log('Fetched products:', result.rows);
+    const result = await pool.query('SELECT * FROM products');
     res.json(result.rows);
   } catch (err) {
-    console.error('Fetch products error:', err.stack);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/products', authenticate, async (req, res) => {
-  const { name, description, issued_date, expired_date, unit_price, lot_number, threshold, quantity } = req.body;
-  console.log('Received Add Product Request:', req.body);
+app.post('/products', authMiddleware('admin'), async (req, res) => {
+  const { name, unit_price, quantity, numlot, issued_date, expired_date, threshold } = req.body;
   try {
     const result = await pool.query(
-      'INSERT INTO products (name, description, issued_date, expired_date, unit_price, lot_number, threshold) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [name, description, issued_date, expired_date, unit_price, lot_number, threshold]
+      'INSERT INTO products (name, unit_price, quantity, numlot, issued_date, expired_date, threshold) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [name, unit_price, quantity, numlot, issued_date, expired_date, threshold || 10]
     );
-    await pool.query('INSERT INTO stocks (product_id, quantity) VALUES ($1, $2)', [result.rows[0].id, quantity || 0]);
-    await pool.query(
-      'INSERT INTO product_logs (product_id, action, user_id, details) VALUES ($1, $2, $3, $4)',
-      [result.rows[0].id, 'create', req.user.id, JSON.stringify(req.body)]
-    );
-    console.log('Added product:', result.rows[0]);
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error('Add product error:', err.stack);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ error: err.message });
   }
 });
 
-app.put('/products/:id', authenticate, async (req, res) => {
+app.put('/products/:id', authMiddleware('admin'), async (req, res) => {
   const { id } = req.params;
-  const { name, description, issued_date, expired_date, unit_price, lot_number, threshold } = req.body;
-  console.log('Received Update Product Request:', { id, body: req.body });
+  const { name, unit_price, quantity, numlot, issued_date, expired_date, threshold } = req.body;
   try {
-    const result = await pool.query(
-      'UPDATE products SET name = $1, description = $2, issued_date = $3, expired_date = $4, unit_price = $5, lot_number = $6, threshold = $7, updated_at = CURRENT_TIMESTAMP WHERE id = $8 RETURNING *',
-      [name, description, issued_date, expired_date, unit_price, lot_number, threshold, id]
+    // Log before update
+    const product = (await pool.query('SELECT * FROM products WHERE id = $1', [id])).rows[0];
+    await pool.query(
+      'INSERT INTO product_logs (product_id, action, user_id, details) VALUES ($1, $2, $3, $4)',
+      [id, 'update', req.user.id, JSON.stringify({ ...product, updated_date: new Date() })]
     );
-    if (result.rowCount === 0) return res.status(404).json({ message: 'Product not found' });
-    console.log('Updated product:', result.rows[0]);
+
+    const result = await pool.query(
+      'UPDATE products SET name = $1, unit_price = $2, quantity = $3, numlot = $4, issued_date = $5, expired_date = $6, threshold = $7, updated_at = CURRENT_TIMESTAMP WHERE id = $8 RETURNING *',
+      [name, unit_price, quantity, numlot, issued_date, expired_date, threshold, id]
+    );
     res.json(result.rows[0]);
   } catch (err) {
-    console.error('Update product error:', err.stack);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ error: err.message });
   }
 });
 
-app.delete('/products/:id', authenticate, async (req, res) => {
+app.delete('/products/:id', authMiddleware('admin'), async (req, res) => {
   const { id } = req.params;
-  console.log('Received Delete Product Request:', { id });
   try {
-    const result = await pool.query('DELETE FROM products WHERE id = $1 RETURNING *', [id]);
-    if (result.rowCount === 0) return res.status(404).json({ message: 'Product not found' });
-    console.log('Deleted product:', result.rows[0]);
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('Delete product error:', err.stack);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-app.get('/alerts', authenticate, async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT p.id, p.name, s.quantity, p.threshold FROM products p LEFT JOIN stocks s ON p.id = s.id WHERE s.quantity < p.threshold'
+    // Log before delete
+    const product = (await pool.query('SELECT * FROM products WHERE id = $1', [id])).rows[0];
+    await pool.query(
+      'INSERT INTO product_logs (product_id, action, user_id, details) VALUES ($1, $2, $3, $4)',
+      [id, 'delete', req.user.id, JSON.stringify({ ...product, updated_date: new Date() })]
     );
-    console.log('Fetched alerts:', result.rows);
-    res.json(result.rows);
+
+    await pool.query('DELETE FROM products WHERE id = $1', [id]);
+    res.status(204).send();
   } catch (err) {
-    console.error('Fetch alerts error:', err.stack);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ error: err.message });
   }
 });
 
-const port = 5010;
-app.listen(port, () => console.log(`Product Management Service running on port ${port}`));
+// Agent command management
+app.post('/commands', authMiddleware('agent'), async (req, res) => {
+  const { product_id, quantity } = req.body;
+  try {
+    const product = (await pool.query('SELECT quantity, threshold FROM products WHERE id = $1', [product_id])).rows[0];
+    if (!product || product.quantity < quantity) {
+      return res.status(400).json({ error: 'Insufficient quantity or product not found' });
+    }
+    const result = await pool.query(
+      'INSERT INTO commands (agent_id, product_id, quantity) VALUES ($1, $2, $3) RETURNING *',
+      [req.user.id, product_id, quantity]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/commands/:id/validate-agent', authMiddleware('agent'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    const command = (await pool.query('SELECT * FROM commands WHERE id = $1 AND agent_id = $2', [id, req.user.id])).rows[0];
+    if (!command) return res.status(403).json({ error: 'Unauthorized or command not found' });
+    await pool.query('UPDATE commands SET agent_validated = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
+    res.json({ message: 'Agent validated' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/commands/:id/validate-admin', authMiddleware('admin'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    const command = (await pool.query('SELECT * FROM commands WHERE id = $1 AND agent_validated = TRUE', [id])).rows[0];
+    if (!command) return res.status(400).json({ error: 'Agent validation required or command not found' });
+    await pool.query(
+      'UPDATE commands SET admin_validated = TRUE, status = \'validated\', updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [id]
+    );
+    await pool.query(
+      'UPDATE products SET quantity = quantity - $1 WHERE id = $2',
+      [command.quantity, command.product_id]
+    );
+    res.json({ message: 'Admin validated, quantity updated' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Agent usage
+app.post('/usage', authMiddleware('agent'), async (req, res) => {
+  const { product_id, quantity_used, command_id } = req.body;
+  try {
+    const command = (await pool.query('SELECT * FROM commands WHERE id = $1 AND agent_id = $2 AND status = \'validated\'', [command_id, req.user.id])).rows[0];
+    if (!command || command.quantity < quantity_used) return res.status(400).json({ error: 'Invalid command or insufficient quantity' });
+    await pool.query(
+      'INSERT INTO usage_logs (agent_id, product_id, quantity_used, command_id) VALUES ($1, $2, $3, $4)',
+      [req.user.id, product_id, quantity_used, command_id]
+    );
+    res.status(201).json({ message: 'Usage logged' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Alerts endpoint (admin can check)
+app.get('/alerts', authMiddleware('admin'), async (req, res) => {
+  try {
+    const lowQuantity = await pool.query(
+      'SELECT id, name, quantity, threshold FROM products WHERE quantity < threshold'
+    );
+    const expired = await pool.query(
+      'SELECT id, name, expired_date FROM products WHERE expired_date <= $1',
+      [currentDate]
+    );
+    res.json({ lowQuantity: lowQuantity.rows, expired: expired.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.listen(5010, () => console.log('Product Management service running on port 5010'));
