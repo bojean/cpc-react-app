@@ -1,0 +1,224 @@
+//require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const pool = require('./db');
+
+const app = express();
+app.use(cors({
+  origin: 'http://localhost:3000', // Allow frontend origin
+  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allowed methods
+  allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers (for token)
+  credentials: true // If using cookies, but not needed here
+}));
+
+//app.options('*', cors()); // Explicit OPTIONS handler
+app.use(express.json());
+
+// Middleware for auth
+//const authenticate = (req, res, next) => {
+//  const token = req.headers.authorization?.split(' ')[1];
+//  if (!token) return res.status(401).json({ message: 'No token' });
+//  try {
+//    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+//    req.user = decoded;
+//    next();
+//  } catch (err) {
+//    res.status(401).json({ message: 'Invalid token' });
+//  }
+//};
+
+const authenticate = (allowedRoles = []) => (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'No token' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (allowedRoles.length && !allowedRoles.includes(decoded.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    req.user = decoded;
+    next();
+  } catch (err) {
+    res.status(401).json({ message: 'Invalid token' });
+  }
+};
+
+
+// Login route
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) return res.status(400).json({ message: 'User not found' });
+    const user = result.rows[0];
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+    const token = jwt.sign({ id: user.id , role: user.role}, process.env.JWT_SECRET, { expiresIn: '1h' });
+    res.json({ token });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Services CRUD (protected)
+app.get('/api/services', authenticate, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM services');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/services', authenticate, async (req, res) => {
+  const { name, code, description, status } = req.body;
+  const finalCode = code || name.charAt(0).toUpperCase();
+  try {
+    const result = await pool.query(
+      'INSERT INTO services (name, code, description, status) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, finalCode, description, status]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Update service
+app.put('/api/services/:id', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const { name, code, description, status } = req.body;
+  const finalCode = code || name.charAt(0).toUpperCase();
+  try {
+    const result = await pool.query(
+      'UPDATE services SET name = $1, code = $2, description = $3, status = $4 WHERE id = $5 RETURNING *',
+      [name, finalCode, description, status, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Service not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Delete service
+app.delete('/api/services/:id', authenticate, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query('DELETE FROM services WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Service not found' });
+    res.json({ message: 'Service deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get visible services (public)
+app.get('/api/visible-services', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM services WHERE status = TRUE');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+//queue api 
+
+app.get('/api/queues', authenticate, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT o.id, s.name as service_name, o.code, o.order_number, o.created_at
+      FROM orders o
+      JOIN services s ON o.service_id = s.id
+      ORDER BY s.name, o.created_at`);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+// Create user (admin only)
+app.post('/api/users', authenticate(['admin']), async (req, res) => {
+  const { email, password, role = 'viewer' } = req.body;
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id, email, role',
+      [email, hashedPassword, role]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// List users (admin only)
+app.get('/api/users', authenticate(['admin']), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, email, role FROM users');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+//Update user account
+
+app.put('/api/user/update', authenticate, async (req, res) => {
+  const { id } = req.user;
+  const { email, password } = req.body;
+  try {
+    let hashedPassword;
+    if (password) {
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+    await pool.query(
+      'UPDATE users SET email = $1, password = COALESCE($2, password) WHERE id = $3',
+      [email, hashedPassword, id]
+    );
+    res.json({ message: 'Account updated' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+//Client order submission
+app.post('/api/client/order', async (req, res) => {
+  const { serviceId, orderNumber } = req.body;
+  try {
+    // Validate orderNumber (alphanumeric, 6-12 chars)
+    if (!/^[a-zA-Z0-9]{6,12}$/.test(orderNumber)) {
+      return res.status(400).json({ message: 'Order number must be 6-12 alphanumeric characters' });
+    }
+
+    // Fetch service code
+    const serviceResult = await pool.query('SELECT code FROM services WHERE id = $1', [serviceId]);
+    if (serviceResult.rows.length === 0) return res.status(404).json({ message: 'Service not found' });
+    const serviceCode = serviceResult.rows[0].code;
+
+    // Get next sequential number for this service
+    const countResult = await pool.query('SELECT COUNT(*) FROM orders WHERE service_id = $1', [serviceId]);
+    const nextNumber = parseInt(countResult.rows[0].count) + 1;
+
+    // Generate code (e.g., T-1)
+    const generatedCode = `${serviceCode}-${nextNumber}`;
+
+    // Save to DB
+    const result = await pool.query(
+      'INSERT INTO orders (service_id, order_number, code) VALUES ($1, $2, $3) RETURNING code',
+      [serviceId, orderNumber, generatedCode]
+    );
+
+    res.json({ code: result.rows[0].code, message: 'Order submitted successfully' });
+  } catch (err) {
+    console.error('Order error:', err.stack);
+    res.status(500).json({ message: err.message });
+  }
+});
+// Update and Delete similarly...
+const port = process.env.PORT || 5000;
+
+app.listen(port, () => console.log(`Server running on port ${port}`));

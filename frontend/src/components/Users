@@ -1,0 +1,115 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useTranslation } from 'react-i18next';
+import { Table, Button, Modal, Form, Container } from 'react-bootstrap';
+
+const Users = () => {
+  const { t } = useTranslation();
+  const [users, setUsers] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ email: '', password: '', role: 'agent' });
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/users');
+      setUsers(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editing) {
+        await axios.put(`http://localhost:5000/api/users/${form.id}`, form);
+      } else {
+        await axios.post('http://localhost:5000/api/users', form);
+      }
+      setShowModal(false);
+      fetchUsers();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const editUser = (user) => {
+    setForm(user);
+    setEditing(true);
+    setShowModal(true);
+  };
+
+  const deleteUser = async (id) => {
+    try {
+      await axios.delete(`http://localhost:5000/api/users/${id}`);
+      fetchUsers();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <Container className="main-content mt-4">
+      <h1>{t('users')}</h1>
+      <Button variant="primary" onClick={() => { setForm({ email: '', password: '', role: 'agent' }); setEditing(false); setShowModal(true); }}>
+        {t('add_user')}
+      </Button>
+      <Table striped bordered hover className="mt-4">
+        <thead>
+          <tr>
+            <th>{t('email')}</th>
+            <th>{t('role')}</th>
+            <th>{t('actions')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((user) => (
+            <tr key={user.id}>
+              <td>{user.email}</td>
+              <td>{user.role}</td>
+              <td>
+                <Button variant="warning" size="sm" onClick={() => editUser(user)}>{t('edit')}</Button>
+                <Button variant="danger" size="sm" onClick={() => deleteUser(user.id)}>{t('delete')}</Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+
+      <Modal show={showModal} onHide={() => setShowModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>{editing ? t('edit_user') : t('add_user')}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form onSubmit={handleSubmit}>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('email')}</Form.Label>
+              <Form.Control type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('password')}</Form.Label>
+              <Form.Control type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('role')}</Form.Label>
+              <Form.Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                <option value="admin">Admin</option>
+                <option value="agent">Agent</option>
+              </Form.Select>
+            </Form.Group>
+            <Button variant="primary" type="submit">
+              {editing ? t('update') : t('add')}
+            </Button>
+          </Form>
+        </Modal.Body>
+      </Modal>
+    </Container>
+  );
+};
+
+export default Users;

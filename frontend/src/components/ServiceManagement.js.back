@@ -1,0 +1,156 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useTranslation } from 'react-i18next';
+import { Button, Table, Modal, Form, Container } from 'react-bootstrap';
+
+const ServiceManagement = () => {
+  const { t } = useTranslation();
+  const [services, setServices] = useState([]);
+  const [form, setForm] = useState({ name: '', code: '', description: '', status: true });
+  const [editingId, setEditingId] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const fetchServices = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/services');
+      setServices(res.data);
+    } catch (err) {
+      console.error(err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingId) {
+        await axios.put(`http://localhost:5000/api/services/${editingId}`, form);
+      } else {
+        await axios.post('http://localhost:5000/api/services', form);
+      }
+      fetchServices();
+      setShowModal(false);
+      setForm({ name: '', code: '', description: '', status: true });
+      setEditingId(null);
+    } catch (err) {
+      console.error(err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleAdd = () => {
+    setEditingId(null);
+    setForm({ name: '', code: '', description: '', status: true });
+    setShowModal(true);
+  };
+
+  const handleEdit = (service) => {
+    setForm({
+      name: service.name,
+      code: service.code,
+      description: service.description,
+      status: service.status,
+    });
+    setEditingId(service.id);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm(t('deleteConfirm'))) {
+      try {
+        await axios.delete(`http://localhost:5000/api/services/${id}`);
+        fetchServices();
+      } catch (err) {
+        console.error(err.response?.data?.message || err.message);
+      }
+    }
+  };
+
+  return (
+    <Container className="main-content">
+      <h1>{t('services')}</h1>
+      <Button variant="primary" onClick={handleAdd} className="mb-3">
+        {t('addService')}
+      </Button>
+      <Table striped bordered hover>
+        <thead>
+          <tr>
+            <th>{t('name')}</th>
+            <th>{t('code')}</th>
+            <th>{t('description')}</th>
+            <th>{t('visible')}</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {services.map((service) => (
+            <tr key={service.id}>
+              <td>{service.name}</td>
+              <td>{service.code}</td>
+              <td>{service.description}</td>
+              <td>{service.status ? t('visible') : t('hidden')}</td>
+              <td>
+                <Button variant="warning" size="sm" onClick={() => handleEdit(service)}>
+                  {t('edit')}
+                </Button>{' '}
+                <Button variant="danger" size="sm" onClick={() => handleDelete(service.id)}>
+                  {t('delete')}
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+
+      {/* Modal for Add/Edit */}
+      <Modal show={showModal} onHide={() => setShowModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>{editingId ? t('updateService') : t('addService')}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form onSubmit={handleSubmit}>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('name')}</Form.Label>
+              <Form.Control
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder={t('name')}
+                required
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('code')}</Form.Label>
+              <Form.Control
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                placeholder={t('code')}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('description')}</Form.Label>
+              <Form.Control
+                as="textarea"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder={t('description')}
+              />
+            </Form.Group>
+            <Form.Check
+              type="checkbox"
+              label={t('visible')}
+              checked={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.checked })}
+            />
+            <Button variant="primary" type="submit">
+              {editingId ? t('updateService') : t('addService')}
+            </Button>
+          </Form>
+        </Modal.Body>
+      </Modal>
+    </Container>
+  );
+};
+
+export default ServiceManagement;

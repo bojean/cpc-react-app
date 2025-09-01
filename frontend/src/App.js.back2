@@ -1,0 +1,102 @@
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faBars, faHome, faCog, faWrench,  faList } from '@fortawesome/free-solid-svg-icons';
+import axios from 'axios';
+import { jwtDecode } from 'jwt-decode';
+import { useTranslation } from 'react-i18next';
+import Welcome from './components/Welcome';
+import Login from './components/Login';
+import Dashboard from './components/Dashboard';
+import ServiceManagement from './components/ServiceManagement';
+import Client from './components/Client';
+import Settings from './components/Settings';
+import Queue from './components/Queue';
+
+
+function App() {
+  const { t, i18n } = useTranslation();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true); // Open by default
+
+  useEffect(() => {
+    document.body.classList.toggle('sidebar-collapsed', !sidebarOpen);
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const decoded = jwtDecode(token);
+        if (decoded.exp * 1000 > Date.now()) setIsAuthenticated(true);
+        else localStorage.removeItem('token');
+      } catch (err) {
+        localStorage.removeItem('token');
+      }
+    }
+    const handleResize = () => {
+      if (window.innerWidth > 768) {
+        setSidebarOpen(true);
+      } else {
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [sidebarOpen]);
+
+  const login = (token) => {
+    localStorage.setItem('token', token);
+    setIsAuthenticated(true);
+  };
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    setIsAuthenticated(false);
+  };
+
+  axios.defaults.headers.common['Authorization'] = `Bearer ${localStorage.getItem('token')}`;
+
+  return (
+    <Router>
+      <div className="lang-switcher" style={{ position: 'fixed', top: 10, right: 10, zIndex: 1002 }}>
+        <select onChange={(e) => i18n.changeLanguage(e.target.value)} value={i18n.language}>
+          <option value="en">English</option>
+          <option value="fr">Français</option>
+        </select>
+      </div>
+      {isAuthenticated && (
+        <>
+          <div className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>
+            <FontAwesomeIcon icon={faBars} size="2x" />
+          </div>
+          <div className={`sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
+            <div className="toggle-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
+              {sidebarOpen ? '<<' : '>>'}
+            </div>
+            {sidebarOpen && (
+              <ul>
+                <li><Link to="/admin/dashboard"><FontAwesomeIcon icon={faHome} /> {t('dashboard')}</Link></li>
+                <li><Link to="/admin/services"><FontAwesomeIcon icon={faWrench} /> {t('services')}</Link></li>
+                <li><Link to="/admin/settings"><FontAwesomeIcon icon={faCog} /> {t('settings')}</Link></li>
+                <li><Link to="/admin/queue"><FontAwesomeIcon icon={faList} /> {t('queue')}</Link></li>
+                        
+                
+                <li onClick={logout} style={{ cursor: 'pointer' }}>{t('logout')}</li>
+              </ul>
+            )}
+          </div>
+        </>
+      )}
+      <Routes>
+        <Route path="/" element={<Welcome />} />
+        <Route path="/login" element={<Login login={login} />} />
+        <Route path="/admin/dashboard" element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />} />
+        <Route path="/admin/services" element={isAuthenticated ? <ServiceManagement /> : <Navigate to="/login" />} />
+        <Route path="/client" element={<Client />} />
+        <Route path="/admin/queue" element={isAuthenticated ? <Queue /> : <Navigate to="/login" />} />
+        <Route path="/admin/settings" element={isAuthenticated ? <Settings /> : <Navigate to="/login" />} />
+        
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;

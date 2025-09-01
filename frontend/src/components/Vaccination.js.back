@@ -1,0 +1,180 @@
+import React, { useState, useEffect } from 'react';
+import axiosInstance from '../axiosInstance';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { Container, Form, Button, Alert, Card } from 'react-bootstrap';
+import { jwtDecode } from 'jwt-decode';
+
+const Vaccination = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [patientName, setPatientName] = useState('');
+  const [patientAge, setPatientAge] = useState('');
+  const [patientSex, setPatientSex] = useState('');
+  const [patientAddress, setPatientAddress] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
+  const [exposureDate, setExposureDate] = useState('');
+  const [exposureType, setExposureType] = useState('');
+  const [animalType, setAnimalType] = useState('');
+  const [animalStatus, setAnimalStatus] = useState('');
+  const [woundLocation, setWoundLocation] = useState('');
+  const [exposureCategory, setExposureCategory] = useState('');
+  const [postExposureMeasures, setPostExposureMeasures] = useState('');
+  const [reporterName, setReporterName] = useState('');
+  const [reporterPosition, setReporterPosition] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const decoded = jwtDecode(token);
+      setReporterName(decoded.email); // Set reporter name from token
+      setReporterPosition('Chef service Vaccination'); // From document
+    }
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!patientName || !patientAge || !patientSex || !patientAddress || !contactNumber || !exposureDate || !exposureType || !animalType || !animalStatus || !woundLocation || !exposureCategory || !postExposureMeasures || !reporterName || !reporterPosition) {
+      setError(t('fill_all_fields'));
+      return;
+    }
+    try {
+      await axiosInstance.post('/rabies-exposures', {
+        patientName,
+        patientAge,
+        patientSex,
+        patientAddress,
+        contactNumber,
+        exposureDate,
+        exposureType,
+        animalType,
+        animalStatus,
+        woundLocation,
+        exposureCategory,
+        postExposureMeasures,
+        reporterName,
+        reporterPosition
+      });
+      setSuccess(t('declaration_submitted'));
+      setError('');
+      // Clear form
+      setPatientName('');
+      setPatientAge('');
+      setPatientSex('');
+      setPatientAddress('');
+      setContactNumber('');
+      setExposureDate('');
+      setExposureType('');
+      setAnimalType('');
+      setAnimalStatus('');
+      setWoundLocation('');
+      setExposureCategory('');
+      setPostExposureMeasures('');
+      setReporterName('');
+      setReporterPosition('');
+      // Navigate to agent page
+      navigate('/agent');
+    } catch (err) {
+      setError(err.response?.data?.message || t('submission_failed'));
+      setSuccess('');
+    }
+  };
+
+  return (
+    <Container className="mt-4 bg-light rounded shadow-sm p-4">
+      <h1>{t('rabies_exposure_declaration')}</h1>
+      {error && <Alert variant="danger">{error}</Alert>}
+      {success && <Alert variant="success">{success}</Alert>}
+      <Card className="shadow-sm">
+        <Card.Body>
+          <Form onSubmit={handleSubmit}>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('patient_name')}</Form.Label>
+              <Form.Control type="text" value={patientName} onChange={(e) => setPatientName(e.target.value)} />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('patient_age')}</Form.Label>
+              <Form.Control type="number" value={patientAge} onChange={(e) => setPatientAge(e.target.value)} />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('patient_sex')}</Form.Label>
+              <Form.Select value={patientSex} onChange={(e) => setPatientSex(e.target.value)}>
+                <option value="">{t('select')}</option>
+                <option value="Male">{t('male')}</option>
+                <option value="Female">{t('female')}</option>
+                <option value="Other">{t('other')}</option>
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('patient_address')}</Form.Label>
+              <Form.Control type="text" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('contact_number')}</Form.Label>
+              <Form.Control type="text" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('exposure_date')}</Form.Label>
+              <Form.Control type="date" value={exposureDate} onChange={(e) => setExposureDate(e.target.value)} />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('exposure_type')}</Form.Label>
+              <Form.Select value={exposureType} onChange={(e) => setExposureType(e.target.value)}>
+                <option value="">{t('select')}</option>
+                <option value="Bite">{t('bite')}</option>
+                <option value="Scratch">{t('scratch')}</option>
+                <option value="Lick">{t('lick')}</option>
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('animal_type')}</Form.Label>
+              <Form.Control type="text" value={animalType} onChange={(e) => setAnimalType(e.target.value)} />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('animal_status')}</Form.Label>
+              <Form.Select value={animalStatus} onChange={(e) => setAnimalStatus(e.target.value)}>
+                <option value="">{t('select')}</option>
+                <option value="Vaccinated">{t('vaccinated')}</option>
+                <option value="Rabid">{t('rabid')}</option>
+                <option value="Owned">{t('owned')}</option>
+                <option value="Stray">{t('stray')}</option>
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('wound_location')}</Form.Label>
+              <Form.Control type="text" value={woundLocation} onChange={(e) => setWoundLocation(e.target.value)} />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('exposure_category')}</Form.Label>
+              <Form.Select value={exposureCategory} onChange={(e) => setExposureCategory(e.target.value)}>
+                <option value="">{t('select')}</option>
+                <option value="I">I</option>
+                <option value="II">II</option>
+                <option value="III">III</option>
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('post_exposure_measures')}</Form.Label>
+              <Form.Control as="textarea" rows={3} value={postExposureMeasures} onChange={(e) => setPostExposureMeasures(e.target.value)} />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('reporter_name')}</Form.Label>
+              <Form.Control type="text" value={reporterName} onChange={(e) => setReporterName(e.target.value)} />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>{t('reporter_position')}</Form.Label>
+              <Form.Control type="text" value={reporterPosition} onChange={(e) => setReporterPosition(e.target.value)} />
+            </Form.Group>
+            <Button variant="primary" type="submit">
+              {t('submit_declaration')}
+            </Button>
+          </Form>
+        </Card.Body>
+      </Card>
+    </Container>
+  );
+};
+
+export default Vaccination;

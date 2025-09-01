@@ -1,0 +1,49 @@
+.command-table {
+  background-color: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.command-table th {
+  background-color: #007bff;
+  color: white;
+  font-weight: 600;
+}
+
+.command-table td {
+  vertical-align: middle;
+}
+
+.card {
+  transition: all 0.3s ease;
+  border-radius: 10px;
+}
+
+.card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.card-header {
+  border-bottom: none;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.btn {
+  transition: all 0.3s ease;
+  border-radius: 5px;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .command-table {
+    font-size: 14px;
+  }
+  .card {
+    margin-bottom: 15px;
+  }
+}

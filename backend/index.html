@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Cameroon Admin Points Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style> #map { height: 600px; } </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map').setView([6, 12.5], 6);  // Center on Cameroon
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Load WFS from GeoServer as GeoJSON
+    var geoJsonUrl = 'http://localhost:8080/geoserver/cam_admin/ows?service=WFS&version=1.1.0&request=GetFeature&typeName=cam_admin:admin_points&maxFeatures=50&outputFormat=application/json&format_options=callback:handleJson';
+    
+    $.ajax({
+      url: geoJsonUrl,
+      dataType: 'jsonp',  // Use JSONP to handle cross-origin
+      jsonpCallback: 'handleJson',
+      success: function(data) {
+        L.geoJSON(data, {
+          pointToLayer: function(feature, latlng) {
+            return L.marker(latlng);
+          },
+          onEachFeature: function(feature, layer) {
+            layer.bindPopup('<b>' + feature.properties.name + '</b><br>Coords: ' + latlng.lat + ', ' + latlng.lng);
+          }
+        }).addTo(map);
+      },
+      error: function() {
+        console.error('Error loading WFS');
+      }
+    });
+  </script>
+</body>
+</html>

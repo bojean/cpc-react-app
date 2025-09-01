@@ -1,0 +1,165 @@
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faBars, faHome, faCog, faWrench, faUser, faList, faSignOutAlt, faBox, faShoppingCart, faFilePdf } from '@fortawesome/free-solid-svg-icons';
+import { Container, Nav, Form } from 'react-bootstrap';
+import { useTranslation } from 'react-i18next';
+import { jwtDecode } from 'jwt-decode';
+import Welcome from './components/Welcome';
+import Login from './components/Login';
+import Dashboard from './components/Dashboard';
+import ServiceManagement from './components/ServiceManagement';
+import Client from './components/Client';
+import Vaccination from './components/Vaccination';
+import Settings from './components/Settings';
+import Queue from './components/Queue';
+import UserManagement from './components/UserManagement';
+import AgentPage from './components/AgentPage';
+import ConsentFormServiceWithErrorBoundary from './components/ConsentFormService';
+import AdminPdfGenerationPage from './components/AdminPdfGenerationPage';
+import ProductManagement from './components/ProductManagement'; // Verify import
+import AgentCommands from './components/AgentCommands';
+import './App.css';
+
+// Debugging function to log component types
+const debugComponent = (component, name) => {
+  if (typeof component !== 'function' && typeof component !== 'string') {
+    console.error(`Invalid component type for ${name}:`, component);
+    console.trace(`Trace for ${name}`);
+  }
+  return component;
+};
+
+function App() {
+  const { t, i18n } = useTranslation();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [role, setRole] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const decoded = jwtDecode(token);
+        if (decoded.exp * 1000 > Date.now()) {
+          setIsAuthenticated(true);
+          setRole(decoded.role);
+        } else {
+          localStorage.removeItem('token');
+        }
+      } catch (err) {
+        localStorage.removeItem('token');
+      }
+    }
+    const handleResize = () => {
+      if (window.innerWidth <= 768) {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const login = (token, userRole) => {
+    localStorage.setItem('token', token);
+    setIsAuthenticated(true);
+    setRole(userRole);
+  };
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    setIsAuthenticated(false);
+    setRole('');
+  };
+
+  const getSidebarItems = () => {
+    if (role === 'admin') {
+      return [
+        { icon: faHome, label: t('dashboard'), path: '/admin/dashboard' },
+        { icon: faWrench, label: t('services'), path: '/admin/services' },
+        { icon: faCog, label: t('settings'), path: '/admin/settings' },
+        { icon: faList, label: t('queue'), path: '/admin/queue' },
+        { icon: faUser, label: t('users'), path: '/admin/user-management' },
+        { icon: faFilePdf, label: t('pdf_generation'), path: '/admin/pdf-generation' },
+        { icon: faBox, label: t('product_management'), path: '/admin/product-management' },
+        { icon: faSignOutAlt, label: t('logout'), onClick: logout }
+      ];
+    } else if (role === 'agent') {
+      return [
+        { icon: faUser, label: t('profile'), path: '/agent/profile' },
+        { icon: faList, label: t('queue'), path: '/agent' },
+        { icon: faFilePdf, label: t('pdf_generation'), path: '/admin/pdf-generation' },
+        { icon: faShoppingCart, label: t('commands'), path: '/agent/commands' },
+        { icon: faSignOutAlt, label: t('logout'), onClick: logout }
+      ];
+    }
+    return [];
+  };
+
+  const isPublicRoute = (path) => {
+    return ['/', '/login', '/client', '/Vaccination', '/consent-form'].includes(path);
+  };
+
+  return (
+    <Router>
+      <div className="app-container">
+        {isAuthenticated && !isPublicRoute(window.location.pathname) && (
+          <div className={`sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
+            <div className="toggle-btn p-3" onClick={() => setSidebarOpen(!sidebarOpen)}>
+              <FontAwesomeIcon icon={faBars} size="lg" />
+            </div>
+            <Nav className="flex-column p-3">
+              <Form.Group className="mb-3">
+                <Form.Select
+                  onChange={(e) => i18n.changeLanguage(e.target.value)}
+                  value={i18n.language}
+                  className="form-select"
+                >
+                  <option value="en">English</option>
+                  <option value="fr">Français</option>
+                </Form.Select>
+              </Form.Group>
+              {getSidebarItems().map((item, index) => (
+                <Nav.Link
+                  key={index}
+                  as={item.path ? Link : 'span'}
+                  to={item.path}
+                  onClick={item.onClick}
+                  className="d-flex align-items-center mb-2"
+                >
+                  <FontAwesomeIcon icon={item.icon} className="fa-icon" />
+                  <span>{item.label}</span>
+                </Nav.Link>
+              ))}
+            </Nav>
+          </div>
+        )}
+        <Container fluid className={`content-container ${isAuthenticated && !isPublicRoute(window.location.pathname) ? '' : 'no-sidebar'}`}>
+          <Routes>
+            <Route path="/" element={debugComponent(<Welcome />, 'Welcome')} />
+            <Route path="/login" element={debugComponent(<Login login={login} />, 'Login')} />
+            <Route path="/admin/dashboard" element={isAuthenticated && role === 'admin' ? debugComponent(<Dashboard />, 'Dashboard') : <Navigate to="/login" />} />
+            <Route path="/admin/services" element={isAuthenticated && role === 'admin' ? debugComponent(<ServiceManagement />, 'ServiceManagement') : <Navigate to="/login" />} />
+            <Route path="/admin/settings" element={isAuthenticated && role === 'admin' ? debugComponent(<Settings />, 'Settings') : <Navigate to="/login" />} />
+            <Route path="/admin/queue" element={isAuthenticated && role === 'admin' ? debugComponent(<Queue />, 'Queue') : <Navigate to="/login" />} />
+            <Route path="/admin/user-management" element={isAuthenticated && role === 'admin' ? debugComponent(<UserManagement />, 'UserManagement') : <Navigate to="/login" />} />
+            <Route path="/agent" element={isAuthenticated && role === 'agent' ? debugComponent(<AgentPage />, 'AgentPage') : <Navigate to="/login" />} />
+            <Route path="/agent/profile" element={isAuthenticated && role === 'agent' ? debugComponent(<AgentPage />, 'AgentPage') : <Navigate to="/login" />} />
+            <Route path="/client" element={debugComponent(<Client />, 'Client')} />
+            <Route path="/Vaccination" element={debugComponent(<Vaccination />, 'Vaccination')} />
+            <Route path="/consent-form" element={debugComponent(<ConsentFormServiceWithErrorBoundary />, 'ConsentFormService')} />
+            <Route path="/admin/pdf-generation" element={isAuthenticated && (role === 'admin' || role === 'agent') ? debugComponent(<AdminPdfGenerationPage />, 'AdminPdfGeneration') : <Navigate to="/login" />} />
+            <Route path="/admin/product-management" element={isAuthenticated && role === 'admin' ? debugComponent(<ProductManagement />, 'ProductManagement') : <Navigate to="/login" />} />
+            <Route path="/agent/commands" element={isAuthenticated && role === 'agent' ? debugComponent(<AgentCommands />, 'AgentCommands') : <Navigate to="/login" />} />
+            <Route path="*" element={<Navigate to="/login" />} />
+          </Routes>
+        </Container>
+      </div>
+    </Router>
+  );
+}
+
+export default App;

@@ -1,0 +1,14 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+
+const Welcome = () => {
+  const { t } = useTranslation();
+  return (
+    <div className="container">
+      <h1>{t('welcome')}</h1>
+      <Link to="/login">{t('login')}</Link> | <Link to="/client">{t('clientAccess')}</Link>
+    </div>
+  );
+};
+export default Welcome;

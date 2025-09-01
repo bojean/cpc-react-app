@@ -1,0 +1,174 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useTranslation } from 'react-i18next';
+import { Container, Row, Col, Card, Button, Form } from 'react-bootstrap';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faVolumeUp, faStop, faTimes, faUserTimes, faCheck } from '@fortawesome/free-solid-svg-icons';
+
+const Queue = () => {
+  const { t, i18n } = useTranslation();
+  const [queues, setQueues] = useState([]);
+  const [nonVisibleServices, setNonVisibleServices] = useState([]);
+  const [voices, setVoices] = useState([]);
+  const [messages, setMessages] = useState({ englishMessage: '', frenchMessage: '' });
+  const [orderTimers, setOrderTimers] = useState({}); // {id: {waiting: 0, reception: 0, interval: id}}
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const synth = window.speechSynthesis;
+    const loadVoices = () => setVoices(synth.getVoices());
+    synth.onvoiceschanged = loadVoices;
+    loadVoices();
+    fetchQueues();
+    fetchNonVisibleServices();
+    fetchMessages();
+    const interval = setInterval(fetchQueues, 5000); // Poll
+    return () => {
+      clearInterval(interval);
+      Object.values(orderTimers).forEach(t => clearInterval(t.interval));
+    };
+  }, []);
+
+  const fetchMessages = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/messages');
+      setMessages(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchQueues = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/queues');
+      setQueues(res.data.filter(order => order.status !== 'ended'));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchNonVisibleServices = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/non-visible-services');
+      setNonVisibleServices(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const callCode = async (order) => {
+    try {
+      await axios.post(`http://localhost:5000/api/orders/${order.id}/call`);
+      const message = i18n.language === 'fr' ? messages.frenchMessage.replace('{code}', order.code) : messages.englishMessage.replace('{code}', order.code);
+      const utterance = new SpeechSynthesisUtterance(message);
+      const voiceName = i18n.language === 'fr' ? localStorage.getItem('frenchVoice') : localStorage.getItem('englishVoice');
+      utterance.voice = voices.find(v => v.name === voiceName);
+      window.speechSynthesis.speak(utterance);
+      const interval = setInterval(() => setOrderTimers(prev => ({ ...prev, [order.id]: (prev[order.id] || 0) + 1 })), 1000);
+      setOrderTimers(prev => ({ ...prev, [order.id]: 0 }));
+      setOrderTimers(prev => ({ ...prev, [`${order.id}_interval`]: interval }));
+      fetchQueues();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const stopWaiting = async (orderId) => {
+    try {
+      await axios.post(`http://localhost:5000/api/orders/${orderId}/stop-waiting`, { waitingTime: orderTimers[orderId] });
+      clearInterval(orderTimers[`${orderId}_interval`]);
+      const interval = setInterval(() => setOrderTimers(prev => ({ ...prev, [`${orderId}_reception`]: (prev[`${orderId}_reception`] || 0) + 1 })), 1000);
+      setOrderTimers(prev => ({ ...prev, [`${orderId}_reception`]: 0, [`${orderId}_reception_interval`]: interval }));
+      fetchQueues();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const stopReception = async (orderId) => {
+    try {
+      await axios.post(`http://localhost:5000/api/orders/${orderId}/stop-reception`, { receptionTime: orderTimers[`${orderId}_reception`] });
+      clearInterval(orderTimers[`${orderId}_reception_interval`]);
+      fetchQueues();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const markAbsent = async (orderId) => {
+    try {
+      await axios.post(`http://localhost:5000/api/orders/${orderId}/absent`, { waitingTime: orderTimers[orderId] });
+      clearInterval(orderTimers[`${orderId}_interval`]);
+      fetchQueues();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const redirect = async (orderId, newServiceId) => {
+    try {
+      await axios.put(`http://localhost:5000/api/orders/${orderId}/redirect`, { newServiceId });
+      clearInterval(orderTimers[`${orderId}_interval`] || orderTimers[`${orderId}_reception_interval`]);
+      fetchQueues();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const endJourney = async (orderId) => {
+    try {
+      await axios.post(`http://localhost:5000/api/orders/${orderId}/end`);
+      clearInterval(orderTimers[`${orderId}_interval`] || orderTimers[`${orderId}_reception_interval`]);
+      fetchQueues();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const groupedQueues = queues.reduce((acc, order) => {
+    if (!acc[order.service_name]) {
+      acc[order.service_name] = [];
+    }
+    acc[order.service_name].push(order);
+    return acc;
+  }, {});
+
+  return (
+    <Container className="main-content mt-4">
+      <h1>{t('queue')}</h1>
+      <Row>
+        {Object.keys(groupedQueues).map((serviceName) => (
+          <Col md={4} key={serviceName} className="mb-3">
+            <Card>
+              <Card.Header>{serviceName}</Card.Header>
+              <Card.Body>
+                <ul className="list-unstyled">
+                  {groupedQueues[serviceName].map((order) => (
+                    <li key={order.id} className="d-flex align-items-center mb-2">
+                      <span>{order.code}</span>
+                      {order.status === 'called' && <span className="mx-2">Waiting: {orderTimers[order.id] || 0}s</span>}
+                      {order.status === 'reception' && <span className="mx-2">Reception: {orderTimers[`${order.id}_reception`] || 0}s</span>}
+                      {order.status === 'pending' && <Button variant="primary" size="sm" onClick={() => callCode(order)}><FontAwesomeIcon icon={faVolumeUp} /></Button>}
+                      {order.status === 'called' && <Button variant="warning" size="sm" onClick={() => stopWaiting(order.id)}><FontAwesomeIcon icon={faStop} /></Button>}
+                      {order.status === 'reception' && <Button variant="success" size="sm" onClick={() => stopReception(order.id)}><FontAwesomeIcon icon={faCheck} /></Button>}
+                      {order.status === 'called' && <Button variant="danger" size="sm" onClick={() => markAbsent(order.id)}><FontAwesomeIcon icon={faUserTimes} /></Button>}
+                      {order.status === 'reception' && (
+                        <Form.Select size="sm" onChange={(e) => redirect(order.id, e.target.value)}>
+                          <option>{t('redirect_to')}</option>
+                          {nonVisibleServices.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </Form.Select>
+                      )}
+                      {(order.status === 'called' || order.status === 'reception') && <Button variant="secondary" size="sm" onClick={() => endJourney(order.id)}><FontAwesomeIcon icon={faTimes} /></Button>}
+                    </li>
+                  ))}
+                </ul>
+              </Card.Body>
+            </Card>
+          </Col>
+        ))}
+      </Row>
+    </Container>
+  );
+};
+
+export default Queue;

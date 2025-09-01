@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Cameroon Admin Points Map</title>
+  <link rel="stylesheet" href="leaflet.css" />
+  <link rel="stylesheet" href="MarkerCluster.css" />
+  <link rel="stylesheet" href="MarkerCluster.Default.css" />
+  <script src="leaflet.js"></script>
+  <script src="leaflet.markercluster.js"></script>
+  <script src="jquery-3.6.0.min.js"></script>
+  <style>
+    #map { height: 600px; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    console.log('Loading Leaflet...');
+    if (typeof L === 'undefined') {
+      console.error('Leaflet is not loaded');
+    } else {
+      console.log('Leaflet loaded successfully');
+    }
+    console.log('Loading jQuery...');
+    if (typeof $ === 'undefined') {
+      console.error('jQuery is not loaded');
+    } else {
+      console.log('jQuery loaded successfully');
+    }
+
+    var map = L.map('map').setView([3.87, 11.51], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 18,
+      errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAA5UExURUdwTMzMzP39/f7+/v39/f7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/nE9zLUAAAAPdFJOUwC8vb3e3t7e3t7e3t7e3t7e3t7e3gAAAAFiS0dEAIgFHUgAAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQfmBRcTKi7vU6MrAAAANklEQVQX02XGMQJAIAwD2RVh//9v4yB2kZnMBrkVEARoM+UcW5fA6B3gV5UADQ2NV8gX1x+9AdkP0QX5cFzqAAAAAElFTkSuQmCC'
+    }).addTo(map);
+
+    var geoJsonUrl = 'http://localhost:8080/geoserver/cam_admin/ows?service=WFS&version=1.1.0&request=GetFeature&typeName=cam_admin:admin_points&maxFeatures=50&outputFormat=application/json';
+
+    $.ajax({
+      url: geoJsonUrl,
+      dataType: 'json',
+      success: function(data) {
+        var markers = L.markerClusterGroup();
+        var geoJsonLayer = L.geoJSON(data, {
+          coordsToLatLng: function(coords) { return L.latLng(coords[1], coords[0]); },
+          pointToLayer: function(feature, latlng) {
+            return L.marker(latlng, {
+              icon: L.icon({
+                iconUrl: 'marker-icon.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowUrl: 'marker-shadow.png'
+              })
+            });
+          },
+          onEachFeature: function(feature, layer) {
+            layer.bindTooltip(feature.properties.name, { permanent: true, direction: 'top', offset: [0, -10] });
+            layer.bindPopup('<b>' + feature.properties.name + '</b><br>Coords: ' + layer.getLatLng().lat + ', ' + layer.getLatLng().lng);
+          }
+        });
+        markers.addLayer(geoJsonLayer);
+        map.addLayer(markers);
+        console.log('GeoJSON loaded:', data);
+      },
+      error: function(jqXHR, textStatus, errorThrown) {
+        console.error('Error loading WFS:', textStatus, errorThrown, 'Status:', jqXHR.status, 'Response:', jqXHR.responseText);
+      }
+    });
+  </script>
+</body>
+</html>

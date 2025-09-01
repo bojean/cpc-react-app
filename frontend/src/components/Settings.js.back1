@@ -1,0 +1,114 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useTranslation } from 'react-i18next';
+import { Form, Button, Container } from 'react-bootstrap';
+
+const Settings = () => {
+  const { t } = useTranslation();
+  const [accountForm, setAccountForm] = useState({ email: '', password: '' });
+  const [messageForm, setMessageForm] = useState({ english_message: '', french_message: '' });
+  const [voices, setVoices] = useState([]);
+  const [englishVoice, setEnglishVoice] = useState(localStorage.getItem('englishVoice') || '');
+  const [frenchVoice, setFrenchVoice] = useState(localStorage.getItem('frenchVoice') || '');
+
+  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        const res = await axios.get('http://localhost:5000/api/messages');
+        setMessageForm(res.data);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchMessages();
+    const synth = window.speechSynthesis;
+    const loadVoices = () => setVoices(synth.getVoices());
+    synth.onvoiceschanged = loadVoices;
+    loadVoices();
+  }, []);
+
+  const handleAccountSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put('http://localhost:5000/api/user/update', accountForm);
+      alert(t('account_updated'));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleMessageSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put('http://localhost:5000/api/messages', messageForm);
+      alert(t('messages_updated'));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleVoiceSubmit = (e) => {
+    e.preventDefault();
+    localStorage.setItem('englishVoice', englishVoice);
+    localStorage.setItem('frenchVoice', frenchVoice);
+    alert(t('voices_updated'));
+  };
+
+  return (
+    <Container className="main-content mt-4">
+      <h1>{t('settings')}</h1>
+      <h2>{t('account')}</h2>
+      <Form onSubmit={handleAccountSubmit}>
+        <Form.Group className="mb-3">
+          <Form.Label>Email</Form.Label>
+          <Form.Control type="email" value={accountForm.email} onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })} />
+        </Form.Group>
+        <Form.Group className="mb-3">
+          <Form.Label>Password</Form.Label>
+          <Form.Control type="password" value={accountForm.password} onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })} />
+        </Form.Group>
+        <Button variant="primary" type="submit">
+          Update Account
+        </Button>
+      </Form>
+
+      <h2 className="mt-4">{t('tts_messages')}</h2>
+      <Form onSubmit={handleMessageSubmit}>
+        <Form.Group className="mb-3">
+          <Form.Label>{t('english_message')}</Form.Label>
+          <Form.Control value={messageForm.english_message} onChange={(e) => setMessageForm({ ...messageForm, english_message: e.target.value })} />
+        </Form.Group>
+        <Form.Group className="mb-3">
+          <Form.Label>{t('french_message')}</Form.Label>
+          <Form.Control value={messageForm.french_message} onChange={(e) => setMessageForm({ ...messageForm, french_message: e.target.value })} />
+        </Form.Group>
+        <Button variant="primary" type="submit">
+          Update Messages
+        </Button>
+      </Form>
+
+      <h2 className="mt-4">{t('tts_settings')}</h2>
+      <Form onSubmit={handleVoiceSubmit}>
+        <Form.Group className="mb-3">
+          <Form.Label>{t('english_voice')}</Form.Label>
+          <Form.Select value={englishVoice} onChange={(e) => setEnglishVoice(e.target.value)}>
+            <option>{t('select')}</option>
+            {voices.filter(v => v.lang.startsWith('en')).map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
+          </Form.Select>
+        </Form.Group>
+        <Form.Group className="mb-3">
+          <Form.Label>{t('french_voice')}</Form.Label>
+          <Form.Select value={frenchVoice} onChange={(e) => setFrenchVoice(e.target.value)}>
+            <option>{t('select')}</option>
+            {voices.filter(v => v.lang.startsWith('fr')).map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
+          </Form.Select>
+        </Form.Group>
+        <Button variant="primary" type="submit">
+          {t('save_voices')}
+        </Button>
+      </Form>
+    </Container>
+  );
+};
+
+export default Settings;

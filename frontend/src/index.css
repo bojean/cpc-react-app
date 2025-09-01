@@ -1,0 +1,161 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  overflow-x: hidden; /* Prevent horizontal scroll from sidebar toggle */
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+@media (max-width: 768px) {
+
+  .container {
+    padding: 10px;
+  }
+  .table {
+    font-size: 0.8rem; /* Smaller text on mobile */
+  }
+  .toggle-btn { display: none; } /* Hamburger handles mobile */
+  .sidebar.collapsed {
+    transform: translateX(-100%);
+    width: 250px; /* Full width when open on mobile */
+  }
+
+  body.sidebar-collapsed .main-content {
+    margin-left: 0;
+  }
+
+   .main-content {
+    margin-left: 0;
+  }
+}
+@media (max-width: 480px) {
+  .container {
+    padding: 5px;
+  }
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  input, textarea, button {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px;
+    font-size: 16px;
+  }
+  button {
+    padding: 10px;
+    font-size: 18px;
+  }
+  ul {
+    padding: 0;
+    list-style: none;
+  }
+  li {
+    padding: 10px;
+    border-bottom: 1px solid #ccc;
+    word-wrap: break-word;
+  }
+}
+
+/* Sidebar and Hamburger */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 200px;
+  background: #333;
+  color: white;
+  transition: transform 0.3s ease;
+  z-index: 1000;
+  transform: translateX(0); /* Visible on desktop */
+ 
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 20px;
+}
+
+.sidebar li {
+  margin-bottom: 20px;
+}
+
+.sidebar a {
+  color: white;
+  text-decoration: none;
+}
+
+.hamburger {
+  display: none;
+  cursor: pointer;
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 1001;
+  color: #000; /* Adjust color for visibility */
+}
+
+.dashboard, .main-content {
+  margin-left: 250px; /* Offset for sidebar on desktop */
+  padding: 20px;
+}
+
+
+
+/* Login page specific - no sidebar offset */
+.login-container {
+  margin-left: 0 !important; /* Ensure login isn't offset */
+}
+
+.sidebar.collapsed {
+  width: 50px; /* Narrow when collapsed */
+  overflow: hidden;
+}
+
+.toggle-btn {
+  cursor: pointer;
+  padding: 10px;
+  text-align: center;
+  color: white;
+  font-weight: bold;
+}
+
+.dashboard, .main-content {
+  margin-left: 250px; /* Full width */
+  transition: margin-left 0.3s ease;
+}
+
+.sidebar.collapsed + .dashboard, .sidebar.collapsed + .main-content {
+  margin-left: 50px; /* Adjusted for collapsed */
+}
+
+
+
+body.sidebar-collapsed .main-content {
+  margin-left: 50px !important; /* Collapsed margin */
+  padding-left: 70px; /* Adjusted padding for collapsed */
+}
+
+.main-content {
+  margin-left: 250px; /* Full margin */
+      
+  padding: 20px 20px 20px 270px; /* Extra left padding to avoid overlap */
+  transition: margin-left 0.3s ease, padding-left 0.3s ease;
+  position: relative; /* Ensure positioning for z-index */
+  z-index: 1; /* Below sidebar if needed, but above background */
+
+}
+.table {
+  width: 100%;
+  overflow-x: auto; /* Scroll horizontally on small screens */
+}
+
+.modal {
+  z-index: 1050; /* Above sidebar */
+}

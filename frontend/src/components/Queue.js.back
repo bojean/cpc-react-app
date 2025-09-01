@@ -1,0 +1,55 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useTranslation } from 'react-i18next';
+import { Container, Row, Col, Card } from 'react-bootstrap';
+
+const Queue = () => {
+  const { t } = useTranslation();
+  const [queues, setQueues] = useState([]);
+
+  useEffect(() => {
+    fetchQueues();
+  }, []);
+
+  const fetchQueues = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/queues');
+      setQueues(res.data);
+    } catch (err) {
+      console.error(err.response?.data?.message || err.message);
+    }
+  };
+
+  // Group codes by service_name
+  const groupedQueues = queues.reduce((acc, order) => {
+    if (!acc[order.service_name]) {
+      acc[order.service_name] = [];
+    }
+    acc[order.service_name].push(order.code);
+    return acc;
+  }, {});
+
+  return (
+    <Container className="main-content mt-4">
+      <h1>{t('queue')}</h1>
+      <Row>
+        {Object.keys(groupedQueues).map((serviceName) => (
+          <Col md={4} key={serviceName} className="mb-3">
+            <Card>
+              <Card.Header>{serviceName}</Card.Header>
+              <Card.Body>
+                <ul className="list-unstyled">
+                  {groupedQueues[serviceName].map((code) => (
+                    <li key={code}>{code}</li>
+                  ))}
+                </ul>
+              </Card.Body>
+            </Card>
+          </Col>
+        ))}
+      </Row>
+    </Container>
+  );
+};
+
+export default Queue;
