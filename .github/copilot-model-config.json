@@ -1,0 +1,42 @@
+{
+  "model": "gpt-5.1-codex-max",
+  "description": "Configuration for GPT-5.1-Codex-Max model",
+  "supported_parameters": {
+    "temperature": {
+      "type": "number",
+      "min": 0,
+      "max": 2,
+      "default": 0.7,
+      "description": "Controls randomness in responses. Higher values make output more random."
+    },
+    "max_tokens": {
+      "type": "integer",
+      "min": 1,
+      "max": 8192,
+      "default": 2048,
+      "description": "Maximum number of tokens to generate in the completion."
+    },
+    "frequency_penalty": {
+      "type": "number",
+      "min": -2,
+      "max": 2,
+      "default": 0,
+      "description": "Positive values penalize tokens based on their frequency in the text so far."
+    },
+    "presence_penalty": {
+      "type": "number",
+      "min": -2,
+      "max": 2,
+      "default": 0,
+      "description": "Positive values penalize tokens based on whether they appear in the text so far."
+    }
+  },
+  "unsupported_parameters": [
+    "top_p"
+  ],
+  "notes": [
+    "The top_p parameter is not supported with this model.",
+    "Use temperature parameter for controlling output randomness instead.",
+    "Attempting to use top_p will result in a 400 Bad Request error."
+  ]
+}
