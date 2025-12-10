@@ -102,12 +102,13 @@ function filterParametersForModel(params, model) {
 function createSafeAPIConfig(options) {
   const { model = 'gpt-4', parameters = {} } = options;
   
-  // Filter parameters based on model
+  // Filter parameters based on model (this will include the model in the result)
   const safeParams = filterParametersForModel(parameters, model);
   
+  // Ensure the model from options takes precedence
   return {
-    model,
-    ...safeParams
+    ...safeParams,
+    model
   };
 }
 
